@@ -1,4 +1,4 @@
-// ─── Cube colors & face defaults ─────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const CUBE_COLORS = {
     white:  '#ffffff',
@@ -9,9 +9,15 @@ const CUBE_COLORS = {
     green:  '#2ecc71'
   };
   
-  const FACE_DEFAULTS = {
-    U: 'white', F: 'green', R: 'red',
-    D: 'yellow', B: 'blue', L: 'orange'
+  const HEX_TO_NAME = {
+    '#ffffff': 'white',  '#f1c40f': 'yellow',
+    '#e74c3c': 'red',    '#e67e22': 'orange',
+    '#3498db': 'blue',   '#2ecc71': 'green'
+  };
+  
+  const FACE_DEFAULT_COLOR = {
+    U: '#ffffff', F: '#2ecc71', R: '#e74c3c',
+    D: '#f1c40f', B: '#3498db', L: '#e67e22'
   };
   
   const FACE_NAMES = {
@@ -19,611 +25,524 @@ const CUBE_COLORS = {
     D: 'Down (Yellow)', B: 'Back (Blue)',   L: 'Left (Orange)'
   };
   
-  // ─── Pro tips (no API needed) ─────────────────────────────────────────────────
-  
   const PRO_TIPS = [
-    "When doing U-perms in PLL, keep your left hand still and only move your right hand. This reduces regrip time and can shave 0.5–1 second off your PLL execution.",
+    "When doing U-perms in PLL, keep your left hand still and only move your right hand. This reduces regrip time and can shave 0.5-1 second off your PLL execution.",
     "Practice your worst OLL cases in isolation rather than full solves. 20 minutes drilling one bad OLL case beats 2 hours of full solves for fixing that specific weakness.",
-    "For F2L, learn to solve pairs without rotating the cube (x, y, z rotations). Every cube rotation costs ~0.3 seconds — eliminating them in F2L can drop your time by 3–5 seconds.",
-    "The fingertrick for R U R' is: index flick R, thumb pushes U, middle finger pulls R'. Chained fast this becomes one fluid motion rather than three separate moves.",
-    "Color neutrality (solving from any color, not just white) gives you better cross options. Start by learning just two opposite colors (white + yellow) before going fully neutral.",
-    "If your cross takes more than 8 moves consistently, you're not planning far enough ahead. Practice solving the cross with your eyes closed after inspecting — forces full planning.",
+    "For F2L, learn to solve pairs without rotating the cube. Every cube rotation costs ~0.3 seconds -- eliminating them in F2L can drop your time by 3-5 seconds.",
+    "The fingertrick for R U R-prime is: index flick R, thumb pushes U, middle finger pulls R-prime. Chained fast this becomes one fluid motion.",
+    "Color neutrality gives you better cross options. Start by learning just two opposite colors (white + yellow) before going fully neutral.",
+    "If your cross takes more than 8 moves consistently, you are not planning far enough ahead. Practice solving the cross eyes-closed after inspecting.",
     "TPS (turns per second) matters more than algorithm choice at the beginner stage. A slower algorithm at 5 TPS beats a fast algorithm at 2 TPS."
   ];
   
-  // ─── State ────────────────────────────────────────────────────────────────────
+  // ─── App State ────────────────────────────────────────────────────────────────
   
-  const FACE_COLORS = {};
-  ['U','F','R','D','B','L'].forEach(f => {
-    FACE_COLORS[f] = Array(9).fill(CUBE_COLORS[FACE_DEFAULTS[f]]);
-  });
+  var cubeState = { U: null, F: null, R: null, D: null, B: null, L: null };
+  var activeFace = null;
+  var pickerColors = [];
+  var pickerSelectedCell = 0;
+  var solutionSteps = [];
+  var currentStepIdx = 0;
+  var currentMethod = 'beginner';
+  var digitalStepIdx = 0;
+  var digitalCubeState = null;
   
-  let cubeState       = { U:null, F:null, R:null, D:null, B:null, L:null };
-  let activeFace      = null;
-  let currentImage    = null;
-  let solutionSteps   = [];
-  let currentStepIdx  = 0;
-  let currentMethod   = 'beginner';
-  let digitalStepIdx  = 0;
-  let pickerSelectedCell = 0;
-  let pickerColors    = [];
+  // ─── Boot ─────────────────────────────────────────────────────────────────────
   
-  // ─── Boot: render face mini-grids ────────────────────────────────────────────
-  
-  ['U','F','R','D','B','L'].forEach(face => {
-    const grid = document.getElementById('grid-' + face);
-    FACE_COLORS[face].forEach(color => {
-      const cell = document.createElement('div');
-      cell.className = 'face-cell';
-      cell.style.background = color + '50';
-      grid.appendChild(cell);
+  window.onload = function() {
+    var faces = ['U','F','R','D','B','L'];
+    faces.forEach(function(face) {
+      var grid = document.getElementById('grid-' + face);
+      grid.innerHTML = '';
+      for (var i = 0; i < 9; i++) {
+        var cell = document.createElement('div');
+        cell.className = 'face-cell';
+        cell.style.background = FACE_DEFAULT_COLOR[face] + '40';
+        grid.appendChild(cell);
+      }
     });
-  });
+    resetDigitalCube();
+    renderCubeNet();
+    loadTip();
+  };
   
-  renderCubeNet();
-  loadTip();
-  
-  // ─── Tab switching ────────────────────────────────────────────────────────────
+  // ─── Tabs ─────────────────────────────────────────────────────────────────────
   
   function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    const tabs = ['scan', 'solve', 'digital', 'tips'];
-    document.querySelectorAll('.tab')[tabs.indexOf(tab)].classList.add('active');
+    var names = ['scan','solve','digital','tips'];
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelectorAll('.tab')[names.indexOf(tab)].classList.add('active');
     document.getElementById('panel-' + tab).classList.add('active');
     if (tab === 'tips')    loadTip();
-    if (tab === 'digital') renderCubeNet();
+    if (tab === 'digital') { resetDigitalCube(); renderCubeNet(); }
   }
   
   // ─── Face selection ───────────────────────────────────────────────────────────
   
   function selectFace(face) {
     activeFace = face;
-    document.querySelectorAll('.face-card').forEach(c => c.style.outline = 'none');
+    ['U','F','R','D','B','L'].forEach(function(f) {
+      document.getElementById('face-' + f).style.outline = 'none';
+    });
     document.getElementById('face-' + face).style.outline = '2px solid #ff6b35';
-    openColorPicker(face);
+  
+    pickerColors = cubeState[face]
+      ? cubeState[face].slice()
+      : new Array(9).fill(FACE_DEFAULT_COLOR[face]);
+    pickerSelectedCell = 0;
+  
+    buildPicker(face);
+    document.getElementById('colorPicker').classList.add('active');
+    setMsg('Editing ' + FACE_NAMES[face] + ' -- click a square, then a color below');
   }
   
   // ─── Color picker ─────────────────────────────────────────────────────────────
   
-  function openColorPicker(face) {
-    document.getElementById('pickerTitle').textContent = 'Set colors — ' + FACE_NAMES[face];
-    pickerSelectedCell = 0;
-    pickerColors = [...(cubeState[face] || FACE_COLORS[face])];
+  function buildPicker(face) {
+    document.getElementById('pickerTitle').textContent = 'Set colors -- ' + FACE_NAMES[face];
   
-    // Build 3×3 clickable grid
-    const grid = document.getElementById('faceInputGrid');
+    var grid = document.getElementById('faceInputGrid');
     grid.innerHTML = '';
-    pickerColors.forEach((color, i) => {
-      const cell = document.createElement('div');
-      cell.className = 'face-input-cell' + (i === 0 ? ' selected' : '');
+  
+    pickerColors.forEach(function(color, i) {
+      var cell = document.createElement('div');
+      cell.className = 'face-input-cell';
+      if (i === 0) cell.classList.add('selected');
       cell.style.background = color;
-      cell.onclick = () => {
-        pickerSelectedCell = i;
-        document.querySelectorAll('.face-input-cell')
-          .forEach((c, j) => c.classList.toggle('selected', j === i));
-      };
+      cell.setAttribute('data-i', i);
+      cell.addEventListener('click', function(e) {
+        e.stopPropagation();
+        pickerSelectedCell = parseInt(this.getAttribute('data-i'));
+        document.querySelectorAll('#faceInputGrid .face-input-cell').forEach(function(c) {
+          c.classList.remove('selected');
+        });
+        this.classList.add('selected');
+      });
       grid.appendChild(cell);
     });
   
-    // Build color palette
-    const palette = document.getElementById('colorPalette');
+    var palette = document.getElementById('colorPalette');
     palette.innerHTML = '';
-    Object.entries(CUBE_COLORS).forEach(([name, hex]) => {
-      const btn = document.createElement('div');
+    Object.keys(CUBE_COLORS).forEach(function(name) {
+      var hex = CUBE_COLORS[name];
+      var btn = document.createElement('div');
       btn.className = 'palette-color';
       btn.style.background = hex;
       btn.title = name;
-      btn.onclick = () => assignColor(hex);
+      btn.setAttribute('data-hex', hex);
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        paintCell(this.getAttribute('data-hex'));
+      });
       palette.appendChild(btn);
     });
-  
-    document.getElementById('colorPicker').classList.add('active');
-    document.getElementById('scanMessage').textContent =
-      'Editing: ' + FACE_NAMES[face] + ' — click a square then a color';
   }
   
-  function assignColor(hex) {
+  function paintCell(hex) {
     pickerColors[pickerSelectedCell] = hex;
-    const cells = document.querySelectorAll('.face-input-cell');
-    cells[pickerSelectedCell].style.background = hex;
-    // Auto-advance to next cell
+    var cells = document.querySelectorAll('#faceInputGrid .face-input-cell');
+    if (cells[pickerSelectedCell]) {
+      cells[pickerSelectedCell].style.background = hex;
+      cells[pickerSelectedCell].classList.remove('selected');
+    }
     if (pickerSelectedCell < 8) {
       pickerSelectedCell++;
-      cells.forEach((c, j) => c.classList.toggle('selected', j === pickerSelectedCell));
+      if (cells[pickerSelectedCell]) cells[pickerSelectedCell].classList.add('selected');
     }
   }
   
   function confirmFaceColors() {
-    if (!activeFace) return;
-    cubeState[activeFace] = [...pickerColors];
-    updateFaceGrid(activeFace, pickerColors);
-    document.getElementById('dot-' + activeFace).classList.add('done');
+    if (!activeFace) { setMsg('Please click a face card first'); return; }
+    cubeState[activeFace] = pickerColors.slice();
+  
+    var miniCells = document.querySelectorAll('#grid-' + activeFace + ' .face-cell');
+    cubeState[activeFace].forEach(function(color, i) {
+      miniCells[i].style.background = color;
+    });
+  
+    document.getElementById('dot-'  + activeFace).classList.add('done');
     document.getElementById('face-' + activeFace).classList.add('captured');
-    checkAllFacesScanned();
+  
+    var done = ['U','F','R','D','B','L'].filter(function(f) { return cubeState[f] !== null; }).length;
+    if (done === 6) {
+      document.getElementById('solveBtn').style.display = 'inline-flex';
+      setMsg('All 6 faces set! Click Get Solution.');
+    } else {
+      setMsg(done + '/6 faces done. ' + (6 - done) + ' remaining.');
+    }
   }
   
-  // ─── Image upload + color detection (color-thief, free) ──────────────────────
+  // ─── Image upload ─────────────────────────────────────────────────────────────
   
   function handleImageUpload(e) {
-    const file = e.target.files[0];
+    var file = e.target.files[0];
     if (!file) return;
-    if (!activeFace) {
-      document.getElementById('scanMessage').textContent = '⚠ Please select a face first';
-      return;
-    }
-    currentImage = file;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = document.getElementById('previewImg');
+    if (!activeFace) { setMsg('Select a face first'); return; }
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var img = document.getElementById('previewImg');
       img.src = ev.target.result;
       img.style.display = 'block';
       document.getElementById('cameraPlaceholder').style.display = 'none';
-      img.onload = () => extractColorsFromImage(img);
+      img.onload = function() { detectColors(img); };
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   }
   
-  function extractColorsFromImage(imgEl) {
+  function detectColors(imgEl) {
     document.getElementById('analyzeSpinner').style.display = 'flex';
     try {
-      const thief = new ColorThief();
-      const palette = thief.getPalette(imgEl, 9);
-      const detected = palette.map(rgb => snapToRubikColor(rgb));
-      pickerColors = detected;
-  
-      // Update picker grid with detected colors
-      const cells = document.querySelectorAll('.face-input-cell');
-      detected.forEach((color, i) => {
-        if (cells[i]) cells[i].style.background = color;
-      });
-  
-      document.getElementById('scanMessage').textContent =
-        'Colors detected! Adjust any squares then click Confirm Face.';
-    } catch (err) {
-      document.getElementById('scanMessage').textContent =
-        'Could not detect colors — please set them manually.';
+      var thief = new ColorThief();
+      var pal   = thief.getPalette(imgEl, 9);
+      pickerColors = pal.map(function(rgb) { return snapColor(rgb); });
+      buildPicker(activeFace);
+      setMsg('Colors detected! Adjust if needed, then click Confirm Face.');
+    } catch(err) {
+      setMsg('Could not detect colors -- set them manually.');
     }
     document.getElementById('analyzeSpinner').style.display = 'none';
   }
   
-  // Snap an arbitrary [r,g,b] to the nearest Rubik's cube color
-  function snapToRubikColor([r, g, b]) {
-    const rubik = [
-      { hex: '#ffffff', rgb: [255, 255, 255] },
-      { hex: '#f1c40f', rgb: [241, 196, 15]  },
-      { hex: '#e74c3c', rgb: [231, 76,  60]  },
-      { hex: '#e67e22', rgb: [230, 126, 34]  },
-      { hex: '#3498db', rgb: [52,  152, 219] },
-      { hex: '#2ecc71', rgb: [46,  204, 113] },
+  function snapColor(rgb) {
+    var t = [
+      { hex:'#ffffff', v:[255,255,255] },
+      { hex:'#f1c40f', v:[241,196,15]  },
+      { hex:'#e74c3c', v:[231,76,60]   },
+      { hex:'#e67e22', v:[230,126,34]  },
+      { hex:'#3498db', v:[52,152,219]  },
+      { hex:'#2ecc71', v:[46,204,113]  }
     ];
-    let best = rubik[0], bestDist = Infinity;
-    rubik.forEach(c => {
-      const d = Math.hypot(r - c.rgb[0], g - c.rgb[1], b - c.rgb[2]);
-      if (d < bestDist) { bestDist = d; best = c; }
+    var best = t[0], bestD = Infinity;
+    t.forEach(function(c) {
+      var d = Math.sqrt(Math.pow(rgb[0]-c.v[0],2)+Math.pow(rgb[1]-c.v[1],2)+Math.pow(rgb[2]-c.v[2],2));
+      if (d < bestD) { bestD = d; best = c; }
     });
     return best.hex;
   }
   
-  // ─── Face grid update ─────────────────────────────────────────────────────────
+  // ─── Validation ───────────────────────────────────────────────────────────────
   
-  function updateFaceGrid(face, colors) {
-    const grid  = document.getElementById('grid-' + face);
-    const cells = grid.querySelectorAll('.face-cell');
-    colors.forEach((color, i) => { cells[i].style.background = color; });
+  function validateCube() {
+    var errors = [];
+    var all = [];
+    ['U','F','R','D','B','L'].forEach(function(f) {
+      cubeState[f].forEach(function(c) { all.push(c); });
+    });
+  
+    var valid = new Set(Object.values(CUBE_COLORS));
+    var bad = all.filter(function(c) { return !valid.has(c); });
+    if (bad.length) errors.push('Some squares have unrecognized colors.');
+  
+    var counts = {};
+    Object.values(CUBE_COLORS).forEach(function(h) { counts[h] = 0; });
+    all.forEach(function(c) { if (counts[c] !== undefined) counts[c]++; });
+    var wrong = [];
+    Object.keys(counts).forEach(function(h) {
+      if (counts[h] !== 9) wrong.push((HEX_TO_NAME[h]||h) + ': ' + counts[h] + ' (need 9)');
+    });
+    if (wrong.length) errors.push('Color counts wrong -- ' + wrong.join(', ') + '.');
+  
+    return errors;
   }
   
-  function checkAllFacesScanned() {
-    const scanned = Object.values(cubeState).filter(v => v !== null).length;
-    if (scanned === 6) {
-      document.getElementById('solveBtn').style.display = 'inline-flex';
-      document.getElementById('scanMessage').textContent =
-        '✓ All 6 faces set! Click Get Solution.';
-    } else {
-      document.getElementById('scanMessage').textContent =
-        scanned + '/6 faces done. ' + (6 - scanned) + ' remaining.';
+  function isSolved() {
+    return ['U','F','R','D','B','L'].every(function(face) {
+      var exp = FACE_DEFAULT_COLOR[face];
+      return cubeState[face].every(function(c) { return c === exp; });
+    });
+  }
+  
+  // ─── Solution generation ──────────────────────────────────────────────────────
+  
+  function generateSolution() {
+    var done = ['U','F','R','D','B','L'].filter(function(f) { return cubeState[f] !== null; }).length;
+    if (done < 6) { setMsg('Set all 6 faces first.'); return; }
+  
+    var errors = validateCube();
+    if (errors.length) {
+      var html = '<div style="background:#3a0f0f;border:1px solid #e74c3c60;border-radius:12px;padding:1rem 1.25rem;margin-top:0.5rem;text-align:left;">'
+        + '<div style="font-family:monospace;font-size:0.75rem;color:#e74c3c;margin-bottom:0.5rem;">INVALID CUBE -- cannot solve</div><ul style="list-style:none;">';
+      errors.forEach(function(e) {
+        html += '<li style="font-size:0.82rem;color:#f5a0a0;line-height:1.5;padding-left:1rem;border-left:2px solid #e74c3c40;margin-bottom:4px">' + e + '</li>';
+      });
+      html += '</ul></div>';
+      document.getElementById('scanMessage').innerHTML = html;
+      return;
     }
+  
+    if (isSolved()) {
+      setMsg('Cube is already solved! Scramble it and try again.');
+      return;
+    }
+  
+    solutionSteps = [];
+    METHODS[currentMethod].forEach(function(phase) {
+      phase.moves.forEach(function(mv) {
+        solutionSteps.push({ move: mv.m, desc: mv.desc, phase: phase.phase });
+      });
+    });
+    currentStepIdx = 0;
+    digitalStepIdx = 0;
+    resetDigitalCube();
+    switchTab('solve');
+    renderSolvePanel();
   }
   
-  // ─── Solution methods ─────────────────────────────────────────────────────────
-  
-  const METHODS = {
+  var METHODS = {
     beginner: [
       { phase: 'White Cross', moves: [
-        { m: 'F',  desc: 'Bring white-green edge to bottom front' },
-        { m: 'R',  desc: 'Rotate right to align white-red edge' },
-        { m: 'U',  desc: 'Cycle top layer to find next edge' },
-        { m: "F'", desc: 'Insert white-orange edge from front' },
+        { m:'F',  desc:'Bring white-green edge to bottom front' },
+        { m:'R',  desc:'Rotate right to align white-red edge' },
+        { m:'U',  desc:'Cycle top layer to find next edge' },
+        { m:"F'", desc:'Insert white-orange edge from front' }
       ]},
       { phase: 'White Corners', moves: [
-        { m: 'R',  desc: 'Set up white corner insertion' },
-        { m: "U'", desc: 'Counterclockwise top to position corner' },
-        { m: "R'", desc: 'Undo right to complete insertion' },
-        { m: 'U',  desc: 'Cycle to next corner position' },
-        { m: 'R',  desc: 'Repeat insertion algorithm start' },
-        { m: "U'", desc: 'Position alignment move' },
-        { m: "R'", desc: 'Complete white layer corner' },
+        { m:'R',  desc:'Set up white corner insertion' },
+        { m:"U'", desc:'Counterclockwise top to position corner' },
+        { m:"R'", desc:'Undo right to complete insertion' },
+        { m:'U',  desc:'Cycle to next corner position' },
+        { m:'R',  desc:'Repeat insertion algorithm' },
+        { m:"U'", desc:'Position alignment move' },
+        { m:"R'", desc:'Complete white layer corner' }
       ]},
       { phase: 'Middle Layer', moves: [
-        { m: 'U',  desc: 'Find middle layer edge on top' },
-        { m: 'R',  desc: 'Trigger right insertion sequence' },
-        { m: "U'", desc: 'Anti-trigger for right slot' },
-        { m: "R'", desc: 'Undo right layer' },
-        { m: "F'", desc: 'Trigger front slot sequence' },
-        { m: 'U',  desc: 'Return front layer to position' },
-        { m: 'F',  desc: 'Complete middle layer edge insert' },
+        { m:'U',  desc:'Find middle layer edge on top' },
+        { m:'R',  desc:'Trigger right insertion sequence' },
+        { m:"U'", desc:'Anti-trigger for right slot' },
+        { m:"R'", desc:'Undo right layer' },
+        { m:"F'", desc:'Trigger front slot sequence' },
+        { m:'U',  desc:'Return front layer to position' },
+        { m:'F',  desc:'Complete middle layer edge insert' }
       ]},
       { phase: 'Yellow Cross (OLL)', moves: [
-        { m: 'F',  desc: 'Begin yellow cross algorithm' },
-        { m: 'R',  desc: 'Right face turn' },
-        { m: 'U',  desc: 'Top face turn' },
-        { m: "R'", desc: 'Undo right face' },
-        { m: "U'", desc: 'Undo top face' },
-        { m: "F'", desc: 'Complete yellow cross edge placement' },
+        { m:'F',  desc:'Begin yellow cross algorithm' },
+        { m:'R',  desc:'Right face turn' },
+        { m:'U',  desc:'Top face turn' },
+        { m:"R'", desc:'Undo right face' },
+        { m:"U'", desc:'Undo top face' },
+        { m:"F'", desc:'Complete yellow cross edge placement' }
       ]},
       { phase: 'Yellow Corners (PLL)', moves: [
-        { m: 'R',  desc: 'Begin corner permutation algorithm' },
-        { m: "U'", desc: 'Counterclockwise top position' },
-        { m: 'L',  desc: 'Left face forward' },
-        { m: "U'", desc: 'Cycle top again' },
-        { m: "R'", desc: 'Undo right face' },
-        { m: 'U',  desc: 'Restore top orientation' },
-        { m: "L'", desc: 'Undo left face' },
-        { m: 'U2', desc: 'Double-turn top — cube solved!' },
+        { m:'R',  desc:'Begin corner permutation algorithm' },
+        { m:"U'", desc:'Counterclockwise top position' },
+        { m:'L',  desc:'Left face forward' },
+        { m:"U'", desc:'Cycle top again' },
+        { m:"R'", desc:'Undo right face' },
+        { m:'U',  desc:'Restore top orientation' },
+        { m:"L'", desc:'Undo left face' },
+        { m:'U2', desc:'Double-turn top -- cube solved!' }
       ]}
     ],
     cfop: [
-      { phase: 'Cross (bottom layer)', moves: [
-        { m: 'D2', desc: 'Orient bottom layer for cross setup' },
-        { m: 'R',  desc: 'Bring white edge to bottom' },
-        { m: "D'", desc: 'Rotate bottom layer' },
-        { m: "R'", desc: 'Secure white cross piece' },
+      { phase: 'Cross (bottom)', moves: [
+        { m:'D2', desc:'Orient bottom layer for cross setup' },
+        { m:'R',  desc:'Bring white edge to bottom' },
+        { m:"D'", desc:'Rotate bottom layer' },
+        { m:"R'", desc:'Secure white cross piece' }
       ]},
       { phase: 'F2L Pairs', moves: [
-        { m: 'U',  desc: 'Cycle top to find F2L pair' },
-        { m: 'R',  desc: 'Begin standard F2L insertion' },
-        { m: "U'", desc: 'Unlock corner for pairing' },
-        { m: "R'", desc: 'Complete first F2L pair' },
-        { m: "U'", desc: 'Move to second slot' },
-        { m: 'F',  desc: 'Front-slot F2L trigger' },
-        { m: 'U',  desc: 'Lift edge into pair' },
-        { m: "F'", desc: 'Seal second F2L pair' },
+        { m:'U',  desc:'Cycle top to find F2L pair' },
+        { m:'R',  desc:'Begin standard F2L insertion' },
+        { m:"U'", desc:'Unlock corner for pairing' },
+        { m:"R'", desc:'Complete first F2L pair' },
+        { m:"U'", desc:'Move to second slot' },
+        { m:'F',  desc:'Front-slot F2L trigger' },
+        { m:'U',  desc:'Lift edge into pair' },
+        { m:"F'", desc:'Seal second F2L pair' }
       ]},
-      { phase: 'OLL (orient last layer)', moves: [
-        { m: 'R',  desc: 'OLL algorithm start' },
-        { m: 'U',  desc: 'Top cycle' },
-        { m: "R'", desc: 'Undo right for OLL' },
-        { m: 'U',  desc: 'Second top cycle' },
-        { m: 'R',  desc: 'Reinsert right' },
-        { m: 'U2', desc: 'Double top — OLL complete' },
-        { m: "R'", desc: 'Finalize OLL orientation' },
+      { phase: 'OLL', moves: [
+        { m:'R',  desc:'OLL algorithm start' },
+        { m:'U',  desc:'Top cycle' },
+        { m:"R'", desc:'Undo right for OLL' },
+        { m:'U',  desc:'Second top cycle' },
+        { m:'R',  desc:'Reinsert right' },
+        { m:'U2', desc:'Double top -- OLL complete' },
+        { m:"R'", desc:'Finalize OLL orientation' }
       ]},
-      { phase: 'PLL (permute last layer)', moves: [
-        { m: "R'", desc: 'U-perm algorithm start' },
-        { m: 'U',  desc: 'Cycle corners' },
-        { m: "R'", desc: 'Anti-trigger' },
-        { m: 'U2', desc: 'Double rotation' },
-        { m: 'R',  desc: 'Forward sequence' },
-        { m: "U'", desc: 'Counterclockwise alignment' },
-        { m: "R'", desc: 'Near-complete PLL' },
-        { m: 'U2', desc: 'Final U-perm — cube solved!' },
+      { phase: 'PLL', moves: [
+        { m:"R'", desc:'U-perm algorithm start' },
+        { m:'U',  desc:'Cycle corners' },
+        { m:"R'", desc:'Anti-trigger' },
+        { m:'U2', desc:'Double rotation' },
+        { m:'R',  desc:'Forward sequence' },
+        { m:"U'", desc:'Counterclockwise alignment' },
+        { m:"R'", desc:'Near-complete PLL' },
+        { m:'U2', desc:'Final U-perm -- cube solved!' }
       ]}
     ],
     optimal: [
-      { phase: 'Optimal Solution (Kociemba-style)', moves: [
-        { m: 'R',  desc: 'Move 1 — reducing to subgroup G1' },
-        { m: "U'", desc: 'Move 2 — minimizing move count' },
-        { m: 'F2', desc: 'Move 3 — half-turn shortcut' },
-        { m: 'L',  desc: 'Move 4 — reducing state space' },
-        { m: "B'", desc: 'Move 5 — back face correction' },
-        { m: 'D',  desc: 'Move 6 — layer alignment' },
-        { m: "R'", desc: 'Move 7 — last face preparation' },
-        { m: 'U2', desc: 'Move 8 — double turn efficiency' },
-        { m: 'F',  desc: 'Move 9 — near solved state' },
-        { m: "D'", desc: 'Move 10 — final correction' },
-        { m: 'R',  desc: "Move 11 — within God's number" },
-        { m: 'U',  desc: 'Move 12 — SOLVED!' },
+      { phase: 'Optimal (Kociemba-style)', moves: [
+        { m:'R',  desc:'Move 1' }, { m:"U'", desc:'Move 2' },
+        { m:'F2', desc:'Move 3' }, { m:'L',  desc:'Move 4' },
+        { m:"B'", desc:'Move 5' }, { m:'D',  desc:'Move 6' },
+        { m:"R'", desc:'Move 7' }, { m:'U2', desc:'Move 8' },
+        { m:'F',  desc:'Move 9' }, { m:"D'", desc:'Move 10' },
+        { m:'R',  desc:'Move 11'},  { m:'U',  desc:'Move 12 -- SOLVED!' }
       ]}
     ]
   };
   
   function selectMethod(method, e) {
     currentMethod = method;
-    document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.method-tab').forEach(function(t) { t.classList.remove('active'); });
     if (e && e.target) e.target.classList.add('active');
-    if (solutionSteps.length > 0) renderSolvePanel();
-  }
-  
-  // ─── Cube state validation ────────────────────────────────────────────────────
-  
-  // Map hex color → color name for readable error messages
-  const HEX_TO_NAME = {
-    '#ffffff': 'white',
-    '#f1c40f': 'yellow',
-    '#e74c3c': 'red',
-    '#e67e22': 'orange',
-    '#3498db': 'blue',
-    '#2ecc71': 'green'
-  };
-  
-  // Each face center (index 4) must match the face's expected color
-  const FACE_CENTER_COLOR = {
-    U: '#ffffff', // white
-    F: '#2ecc71', // green
-    R: '#e74c3c', // red
-    D: '#f1c40f', // yellow
-    B: '#3498db', // blue
-    L: '#e67e22'  // orange
-  };
-  
-  function validateCubeState() {
-    const errors = [];
-    const allColors = [];
-  
-    // Collect all 54 stickers
-    ['U','F','R','D','B','L'].forEach(face => {
-      cubeState[face].forEach(color => allColors.push(color));
-    });
-  
-    // ── Rule 1: Every sticker must be a valid Rubik's color ──
-    const validHexes = new Set(Object.values(CUBE_COLORS));
-    const invalidColors = allColors.filter(c => !validHexes.has(c));
-    if (invalidColors.length > 0) {
-      errors.push('Some squares have unrecognized colors. Please use only the 6 standard cube colors.');
-    }
-  
-    // ── Rule 2: Exactly 9 stickers of each color ──
-    const colorCount = {};
-    Object.values(CUBE_COLORS).forEach(hex => { colorCount[hex] = 0; });
-    allColors.forEach(c => { if (colorCount[c] !== undefined) colorCount[c]++; });
-  
-    const wrongCounts = [];
-    Object.entries(colorCount).forEach(([hex, count]) => {
-      if (count !== 9) {
-        wrongCounts.push(`${HEX_TO_NAME[hex] || hex}: ${count} (need 9)`);
-      }
-    });
-    if (wrongCounts.length > 0) {
-      errors.push('Each color must appear exactly 9 times. Wrong counts — ' + wrongCounts.join(', ') + '.');
-    }
-  
-    // ── Rule 3: Each face center must match its expected color ──
-    const wrongCenters = [];
-    Object.entries(FACE_CENTER_COLOR).forEach(([face, expectedHex]) => {
-      const center = cubeState[face][4]; // index 4 = center cell
-      if (center !== expectedHex) {
-        wrongCenters.push(
-          `${FACE_NAMES[face]} center is ${HEX_TO_NAME[center] || center}, expected ${HEX_TO_NAME[expectedHex]}`
-        );
-      }
-    });
-    if (wrongCenters.length > 0) {
-      errors.push('Face centers are wrong — ' + wrongCenters.join('; ') + '. Centers never move on a real cube.');
-    }
-  
-    // ── Rule 4: No face can be all one color except if the whole cube is solved ──
-    // (catches obvious copy-paste mistakes where someone sets all 9 to wrong color)
-    const suspiciousFaces = [];
-    ['U','F','R','D','B','L'].forEach(face => {
-      const colors = cubeState[face];
-      const allSame = colors.every(c => c === colors[0]);
-      const expectedCenter = FACE_CENTER_COLOR[face];
-      if (allSame && colors[0] !== expectedCenter) {
-        suspiciousFaces.push(FACE_NAMES[face]);
-      }
-    });
-    if (suspiciousFaces.length > 0) {
-      errors.push('These faces are all one wrong color, which is impossible: ' + suspiciousFaces.join(', ') + '.');
-    }
-  
-    return errors;
-  }
-  
-  function showValidationErrors(errors) {
-    const msg = document.getElementById('scanMessage');
-  
-    // Build error box HTML
-    let html = `
-      <div style="
-        background: #3a0f0f;
-        border: 1px solid #e74c3c60;
-        border-radius: 12px;
-        padding: 1rem 1.25rem;
-        margin-top: 1rem;
-        text-align: left;
-      ">
-        <div style="
-          font-family: 'Space Mono', monospace;
-          font-size: 0.75rem;
-          color: #e74c3c;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-bottom: 0.75rem;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        ">⚠ Invalid cube state — cannot solve</div>
-        <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
-    `;
-    errors.forEach(err => {
-      html += `
-        <li style="
-          font-size: 0.82rem;
-          color: #f5a0a0;
-          line-height: 1.5;
-          padding-left: 1rem;
-          border-left: 2px solid #e74c3c40;
-        ">${err}</li>
-      `;
-    });
-    html += `
-        </ul>
-        <div style="
-          margin-top: 0.75rem;
-          font-size: 0.78rem;
-          color: #888;
-        ">Go back to each face and correct the colors, then try again.</div>
-      </div>
-    `;
-  
-    msg.innerHTML = html;
-  
-    // Also highlight the solve button red briefly
-    const btn = document.getElementById('solveBtn');
-    btn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
-    btn.style.boxShadow  = '0 4px 20px rgba(231,76,60,0.4)';
-    setTimeout(() => {
-      btn.style.background = '';
-      btn.style.boxShadow  = '';
-    }, 2000);
-  }
-  
-  // Returns true if every face is uniformly its correct center color
-  function isCubeSolved() {
-    return Object.entries(FACE_CENTER_COLOR).every(([face, expectedHex]) =>
-      cubeState[face].every(cell => cell === expectedHex)
-    );
-  }
-  
-  function generateSolution() {
-    const scanned = Object.values(cubeState).filter(v => v !== null).length;
-    if (scanned < 6) {
-      document.getElementById('scanMessage').innerHTML =
-        '<span style="color:#e74c3c">⚠ Please set all 6 faces before solving.</span>';
-      return;
-    }
-  
-    // Check if already solved
-    const errors = validateCubeState();
-    if (errors.length > 0) {
-      showValidationErrors(errors);
-      return;
-    }
-  
-    // Check if cube is already solved
-    if (isCubeSolved()) {
-      document.getElementById('scanMessage').innerHTML =
-        '<div style="background:#0f2a0f;border:1px solid #4ade8040;border-radius:12px;padding:1rem 1.25rem;margin-top:1rem;text-align:left;">' +
-        '<div style="font-family:\'Space Mono\',monospace;font-size:0.75rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">✓ Cube is already solved!</div>' +
-        '<div style="font-size:0.85rem;color:#86efac;line-height:1.6;">Your cube is in the solved state — no moves needed. Scramble it and try again!</div>' +
-        '</div>';
-      return;
-    }
-  
-    // All good — clear any previous error and generate solution
-    document.getElementById('scanMessage').textContent = '✓ Valid cube state — generating solution...';
-    switchTab('solve');
-    solutionSteps = [];
-    METHODS[currentMethod].forEach(phase => {
-      phase.moves.forEach(mv => {
-        solutionSteps.push({ move: mv.m, desc: mv.desc, phase: phase.phase });
-      });
-    });
-    currentStepIdx = 0;
-    digitalStepIdx = 0;
-    renderSolvePanel();
+    if (solutionSteps.length) renderSolvePanel();
   }
   
   function renderSolvePanel() {
-    const container = document.getElementById('solveContent');
+    var container = document.getElementById('solveContent');
     if (!solutionSteps.length) {
-      container.innerHTML =
-        '<div class="empty-state"><span class="empty-icon">🧩</span>Set all 6 faces first</div>';
+      container.innerHTML = '<div class="empty-state"><span class="empty-icon">🧩</span>Set all 6 faces first</div>';
       return;
     }
-    const phases = [...new Set(solutionSteps.map(s => s.phase))];
-    let html = '';
-    phases.forEach(phase => {
-      const phaseSteps = solutionSteps.filter(s => s.phase === phase);
-      const phaseIdx   = solutionSteps.indexOf(phaseSteps[0]);
-      html += `<div class="solve-status">
-        <div class="solve-header">
-          <h3>${phase}</h3>
-          <span class="move-count-badge">${phaseSteps.length} moves</span>
-        </div>
-        <div class="steps-list">`;
-      phaseSteps.forEach((step, i) => {
-        const gIdx = phaseIdx + i;
-        const cls  = gIdx < currentStepIdx ? 'done' : gIdx === currentStepIdx ? 'current' : '';
-        html += `<div class="step-item ${cls}" onclick="markStep(${gIdx})">
-          <span class="step-num">${String(gIdx + 1).padStart(2, '0')}</span>
-          <span class="step-move">${step.move}</span>
-          <span class="step-desc">${step.desc}</span>
-          <span class="step-check">✓</span>
-        </div>`;
+    var phases = [];
+    solutionSteps.forEach(function(s) { if (phases.indexOf(s.phase) === -1) phases.push(s.phase); });
+    var html = '';
+    phases.forEach(function(phase) {
+      var ps  = solutionSteps.filter(function(s) { return s.phase === phase; });
+      var pi  = solutionSteps.indexOf(ps[0]);
+      html += '<div class="solve-status"><div class="solve-header"><h3>' + phase + '</h3>'
+        + '<span class="move-count-badge">' + ps.length + ' moves</span></div><div class="steps-list">';
+      ps.forEach(function(step, i) {
+        var gi  = pi + i;
+        var cls = gi < currentStepIdx ? 'done' : gi === currentStepIdx ? 'current' : '';
+        html += '<div class="step-item ' + cls + '" onclick="markStep(' + gi + ')">'
+          + '<span class="step-num">' + String(gi+1).padStart(2,'0') + '</span>'
+          + '<span class="step-move">' + step.move + '</span>'
+          + '<span class="step-desc">'  + step.desc  + '</span>'
+          + '<span class="step-check">&#10003;</span></div>';
       });
       html += '</div></div>';
     });
     container.innerHTML = html;
   }
   
-  function markStep(idx) {
-    currentStepIdx = idx + 1;
-    renderSolvePanel();
+  function markStep(idx) { currentStepIdx = idx + 1; renderSolvePanel(); }
+  
+  // ─── Digital cube simulation ──────────────────────────────────────────────────
+  
+  function resetDigitalCube() {
+    digitalCubeState = {};
+    ['U','F','R','D','B','L'].forEach(function(f) {
+      digitalCubeState[f] = cubeState[f]
+        ? cubeState[f].slice()
+        : new Array(9).fill(FACE_DEFAULT_COLOR[f]);
+    });
   }
   
-  // ─── Digital cube net ─────────────────────────────────────────────────────────
+  function rotateFaceCW(face) {
+    var f = digitalCubeState[face];
+    digitalCubeState[face] = [f[6],f[3],f[0],f[7],f[4],f[1],f[8],f[5],f[2]];
+  }
+  
+  function applyMove(moveStr) {
+    var base  = moveStr.replace(/[^RLUDFB]/g, '');
+    var times = moveStr.indexOf("'") !== -1 ? 3 : moveStr.indexOf('2') !== -1 ? 2 : 1;
+    for (var t = 0; t < times; t++) { doMove(base); }
+  }
+  
+  function inverseMove(mv) {
+    if (mv.indexOf("'") !== -1) return mv.replace("'","");
+    if (mv.indexOf('2')  !== -1) return mv;
+    return mv + "'";
+  }
+  
+  function doMove(base) {
+    var U=digitalCubeState.U, F=digitalCubeState.F, R=digitalCubeState.R,
+        D=digitalCubeState.D, B=digitalCubeState.B, L=digitalCubeState.L, tmp;
+    if (base==='R') {
+      rotateFaceCW('R'); tmp=[U[2],U[5],U[8]];
+      U[2]=F[2]; U[5]=F[5]; U[8]=F[8]; F[2]=D[2]; F[5]=D[5]; F[8]=D[8];
+      D[2]=B[6]; D[5]=B[3]; D[8]=B[0]; B[0]=tmp[2]; B[3]=tmp[1]; B[6]=tmp[0];
+    } else if (base==='L') {
+      rotateFaceCW('L'); tmp=[U[0],U[3],U[6]];
+      U[0]=B[8]; U[3]=B[5]; U[6]=B[2]; B[2]=D[6]; B[5]=D[3]; B[8]=D[0];
+      D[0]=F[0]; D[3]=F[3]; D[6]=F[6]; F[0]=tmp[0]; F[3]=tmp[1]; F[6]=tmp[2];
+    } else if (base==='U') {
+      rotateFaceCW('U'); tmp=[F[0],F[1],F[2]];
+      F[0]=R[0]; F[1]=R[1]; F[2]=R[2]; R[0]=B[0]; R[1]=B[1]; R[2]=B[2];
+      B[0]=L[0]; B[1]=L[1]; B[2]=L[2]; L[0]=tmp[0]; L[1]=tmp[1]; L[2]=tmp[2];
+    } else if (base==='D') {
+      rotateFaceCW('D'); tmp=[F[6],F[7],F[8]];
+      F[6]=L[6]; F[7]=L[7]; F[8]=L[8]; L[6]=B[6]; L[7]=B[7]; L[8]=B[8];
+      B[6]=R[6]; B[7]=R[7]; B[8]=R[8]; R[6]=tmp[0]; R[7]=tmp[1]; R[8]=tmp[2];
+    } else if (base==='F') {
+      rotateFaceCW('F'); tmp=[U[6],U[7],U[8]];
+      U[6]=L[8]; U[7]=L[5]; U[8]=L[2]; L[2]=D[0]; L[5]=D[1]; L[8]=D[2];
+      D[0]=R[6]; D[1]=R[3]; D[2]=R[0]; R[0]=tmp[0]; R[3]=tmp[1]; R[6]=tmp[2];
+    } else if (base==='B') {
+      rotateFaceCW('B'); tmp=[U[0],U[1],U[2]];
+      U[0]=R[2]; U[1]=R[5]; U[2]=R[8]; R[2]=D[8]; R[5]=D[7]; R[8]=D[6];
+      D[6]=L[0]; D[7]=L[3]; D[8]=L[6]; L[0]=tmp[2]; L[3]=tmp[1]; L[6]=tmp[0];
+    }
+  }
   
   function renderCubeNet() {
-    const net = document.getElementById('cubeNet');
+    if (!digitalCubeState) resetDigitalCube();
+    var net    = document.getElementById('cubeNet');
     net.innerHTML = '';
-    const layout = [
-      [null, 'U', null, null],
-      ['L',  'F', 'R',  'B'],
-      [null, 'D', null, null]
-    ];
-    layout.forEach(row => {
-      row.forEach(face => {
-        if (!face) { net.appendChild(document.createElement('div')); return; }
-        const faceEl = document.createElement('div');
-        faceEl.className = 'net-face';
-        const colors = cubeState[face] || FACE_COLORS[face];
-        colors.forEach(color => {
-          const cell = document.createElement('div');
-          cell.className = 'net-cell';
-          cell.style.background = color;
-          faceEl.appendChild(cell);
+    var layout = [[null,'U',null,null],['L','F','R','B'],[null,'D',null,null]];
+    layout.forEach(function(row) {
+      row.forEach(function(face) {
+        var el = document.createElement('div');
+        if (!face) { net.appendChild(el); return; }
+        el.className = 'net-face';
+        digitalCubeState[face].forEach(function(color) {
+          var c = document.createElement('div');
+          c.className = 'net-cell';
+          c.style.background = color;
+          el.appendChild(c);
         });
-        net.appendChild(faceEl);
+        net.appendChild(el);
       });
     });
-    updateDigitalDisplay();
+    updateDigitalInfo();
   }
   
-  function updateDigitalDisplay() {
-    const total = solutionSteps.length;
-    const pct   = total > 0 ? (digitalStepIdx / total * 100) : 0;
-    document.getElementById('progressBar').style.width = pct + '%';
-    document.getElementById('digitalProgressText').textContent =
-      digitalStepIdx + ' / ' + total + ' moves';
-    if (digitalStepIdx > 0 && solutionSteps[digitalStepIdx - 1]) {
-      const mv = solutionSteps[digitalStepIdx - 1];
+  function updateDigitalInfo() {
+    var total = solutionSteps.length;
+    document.getElementById('progressBar').style.width = (total > 0 ? digitalStepIdx/total*100 : 0) + '%';
+    document.getElementById('digitalProgressText').textContent = digitalStepIdx + ' / ' + total + ' moves';
+    if (digitalStepIdx > 0 && solutionSteps[digitalStepIdx-1]) {
+      var mv = solutionSteps[digitalStepIdx-1];
       document.getElementById('digitalMoveDisplay').textContent = mv.move;
       document.getElementById('digitalMoveName').textContent    = mv.desc;
     } else {
-      document.getElementById('digitalMoveDisplay').textContent = '—';
-      document.getElementById('digitalMoveName').textContent    =
-        total > 0 ? 'Press Next to start' : 'Generate a solution first';
+      document.getElementById('digitalMoveDisplay').textContent = '--';
+      document.getElementById('digitalMoveName').textContent    = total > 0 ? 'Press Next to start' : 'Generate a solution first';
     }
   }
   
   function digitalNext() {
-    if (digitalStepIdx < solutionSteps.length) { digitalStepIdx++; updateDigitalDisplay(); }
+    if (digitalStepIdx < solutionSteps.length) {
+      applyMove(solutionSteps[digitalStepIdx].move);
+      digitalStepIdx++;
+      renderCubeNet();
+    }
   }
   
   function digitalPrev() {
-    if (digitalStepIdx > 0) { digitalStepIdx--; updateDigitalDisplay(); }
+    if (digitalStepIdx > 0) {
+      digitalStepIdx--;
+      applyMove(inverseMove(solutionSteps[digitalStepIdx].move));
+      renderCubeNet();
+    }
   }
   
-  function digitalReset() {
-    digitalStepIdx = 0;
-    updateDigitalDisplay();
-  }
+  function digitalReset() { digitalStepIdx = 0; resetDigitalCube(); renderCubeNet(); }
   
   // ─── Tips ─────────────────────────────────────────────────────────────────────
   
   function loadTip() {
-    const idx = Math.floor(Math.random() * PRO_TIPS.length);
-    document.getElementById('aiTipContent').textContent = PRO_TIPS[idx];
+    document.getElementById('aiTipContent').textContent = PRO_TIPS[Math.floor(Math.random()*PRO_TIPS.length)];
+  }
+  
+  // ─── Util ─────────────────────────────────────────────────────────────────────
+  
+  function setMsg(text) {
+    var el = document.getElementById('scanMessage');
+    el.innerHTML = '';
+    el.textContent = text;
   }
