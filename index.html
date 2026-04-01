@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rubik's Cube Solver</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-logo">
+        <svg class="cube-icon" viewBox="0 0 48 48" fill="none">
+          <path d="M24 4L44 15V33L24 44L4 33V15L24 4Z" fill="#1e1e28" stroke="#2a2a35" stroke-width="1"/>
+          <path d="M24 4L44 15L24 26L4 15L24 4Z" fill="#ff6b35" opacity="0.8"/>
+          <path d="M4 15L24 26V44L4 33V15Z" fill="#004e89" opacity="0.9"/>
+          <path d="M44 15L24 26V44L44 33V15Z" fill="#f7c59f" opacity="0.8"/>
+        </svg>
+        <h1>CUBE SOLVER</h1>
+      </div>
+      <p>Scan all 6 faces · Get step-by-step solution · Practice digitally</p>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('scan')">① Scan Cube</button>
+      <button class="tab" onclick="switchTab('solve')">② Solution Steps</button>
+      <button class="tab" onclick="switchTab('digital')">③ Digital Solve</button>
+      <button class="tab" onclick="switchTab('tips')">④ Tips & Tricks</button>
+    </div>
+
+    <!-- SCAN PANEL -->
+    <div id="panel-scan" class="panel active">
+      <div class="info-banner">
+        📸 Select a face, upload a photo or set colors manually, then confirm each face.
+      </div>
+      <div class="faces-grid">
+        <div class="face-card" id="face-U" onclick="selectFace('U')">
+          <div class="face-label">Up (White) <span class="dot" id="dot-U"></span></div>
+          <div class="face-mini-grid" id="grid-U"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+        <div class="face-card" id="face-F" onclick="selectFace('F')">
+          <div class="face-label">Front (Green) <span class="dot" id="dot-F"></span></div>
+          <div class="face-mini-grid" id="grid-F"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+        <div class="face-card" id="face-R" onclick="selectFace('R')">
+          <div class="face-label">Right (Red) <span class="dot" id="dot-R"></span></div>
+          <div class="face-mini-grid" id="grid-R"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+        <div class="face-card" id="face-D" onclick="selectFace('D')">
+          <div class="face-label">Down (Yellow) <span class="dot" id="dot-D"></span></div>
+          <div class="face-mini-grid" id="grid-D"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+        <div class="face-card" id="face-B" onclick="selectFace('B')">
+          <div class="face-label">Back (Blue) <span class="dot" id="dot-B"></span></div>
+          <div class="face-mini-grid" id="grid-B"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+        <div class="face-card" id="face-L" onclick="selectFace('L')">
+          <div class="face-label">Left (Orange) <span class="dot" id="dot-L"></span></div>
+          <div class="face-mini-grid" id="grid-L"></div>
+          <div class="face-add-btn"><span>+ Tap to edit</span></div>
+        </div>
+      </div>
+
+      <input type="file" id="fileInput" accept="image/*" onchange="handleImageUpload(event)">
+
+      <div class="camera-area">
+        <img id="previewImg" src="" alt="preview">
+        <div class="camera-placeholder" id="cameraPlaceholder">
+          <div style="font-size:2rem;margin-bottom:0.75rem">📷</div>
+          <div>Select a face above then upload a photo</div>
+          <div style="margin-top:0.5rem;color:#333;font-size:0.8rem">Or set colors manually below</div>
+        </div>
+      </div>
+
+      <div class="analyze-spinner" id="analyzeSpinner">
+        <div class="spinner"></div> Detecting colors...
+      </div>
+
+      <div class="color-picker-overlay" id="colorPicker">
+        <h4 id="pickerTitle">Set colors for face</h4>
+        <p class="picker-hint">Click a square, then click a color to assign it.</p>
+        <div class="face-input-grid" id="faceInputGrid"></div>
+        <div class="color-palette" id="colorPalette"></div>
+        <div class="picker-actions">
+          <button class="scan-btn btn-primary" onclick="confirmFaceColors()">✓ Confirm Face</button>
+          <button class="scan-btn btn-secondary" onclick="document.getElementById('fileInput').click()">📁 Upload Photo</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="scan-btn btn-primary" id="solveBtn" onclick="generateSolution()" style="display:none">⚡ Get Solution</button>
+      </div>
+      <div id="scanMessage"></div>
+    </div>
+
+    <!-- SOLVE PANEL -->
+    <div id="panel-solve" class="panel">
+      <div class="method-tabs">
+        <button class="method-tab active" onclick="selectMethod('beginner', event)">Beginner</button>
+        <button class="method-tab" onclick="selectMethod('cfop', event)">CFOP</button>
+        <button class="method-tab" onclick="selectMethod('optimal', event)">Optimal</button>
+      </div>
+      <div class="notation-ref">
+        <div class="notation-label">Notation key</div>
+        <div class="notation-pill"><span class="move-key">R</span><span class="move-name">Right CW</span></div>
+        <div class="notation-pill"><span class="move-key">R'</span><span class="move-name">Right CCW</span></div>
+        <div class="notation-pill"><span class="move-key">U</span><span class="move-name">Up CW</span></div>
+        <div class="notation-pill"><span class="move-key">U'</span><span class="move-name">Up CCW</span></div>
+        <div class="notation-pill"><span class="move-key">F</span><span class="move-name">Front CW</span></div>
+        <div class="notation-pill"><span class="move-key">L</span><span class="move-name">Left CW</span></div>
+        <div class="notation-pill"><span class="move-key">D</span><span class="move-name">Down CW</span></div>
+        <div class="notation-pill"><span class="move-key">2</span><span class="move-name">Half turn</span></div>
+      </div>
+      <div id="solveContent">
+        <div class="empty-state"><span class="empty-icon">🧩</span>Set all 6 faces first</div>
+      </div>
+    </div>
+
+    <!-- DIGITAL PANEL -->
+    <div id="panel-digital" class="panel">
+      <div class="cube-3d-container">
+        <div class="net-label">Cube net view</div>
+        <div class="cube-3d-wrap">
+          <div>
+            <div id="cubeNet" class="cube-net"></div>
+            <div class="net-sublabel">unfolded net</div>
+          </div>
+          <div class="cube-info-panel">
+            <h4>Current move</h4>
+            <div class="move-display" id="digitalMoveDisplay">—</div>
+            <div class="move-name-display" id="digitalMoveName">Ready to start</div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text" id="digitalProgressText">0 / 0 moves</div>
+            <div class="digital-controls">
+              <button class="scan-btn btn-secondary" onclick="digitalPrev()">← Prev</button>
+              <button class="scan-btn btn-primary" onclick="digitalNext()">Next →</button>
+              <button class="scan-btn btn-secondary" onclick="digitalReset()">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIPS PANEL -->
+    <div id="panel-tips" class="panel">
+      <div class="tips-grid">
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#ff6b3520">🎯</div>
+          <div class="tip-body"><h4>Learn notation fluently first</h4><p>Practice R, R', U, U', F, F' in isolation. Muscle memory is 80% of speed.</p></div>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#004e8920">🔵</div>
+          <div class="tip-body"><h4>Solve layer by layer</h4><p>White cross → white corners → middle edges → yellow cross → yellow corners. Never solve one color at a time.</p></div>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#f7c59f20">⚡</div>
+          <div class="tip-body"><h4>Look ahead while executing</h4><p>Find the next piece while your hands finish the current move. This alone can halve your time.</p></div>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#4ade8020">🌀</div>
+          <div class="tip-body"><h4>Master F2L for a real speedup</h4><p>F2L pairs corners and edges together. Learn the 41 cases to cut 30–40% off your time.</p></div>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#a78bfa20">🧠</div>
+          <div class="tip-body"><h4>Track your solves with a timer</h4><p>Aim for consistent Ao5 (average of 5). Under 2 minutes consistently? Start learning OLL and PLL.</p></div>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon" style="background:#f472b620">🤲</div>
+          <div class="tip-body"><h4>Optimize finger tricks</h4><p>R uses index finger flick. U uses thumb push. These micro-optimizations compound over thousands of solves.</p></div>
+        </div>
+      </div>
+      <div class="ai-tip-box">
+        <h4>✦ Pro tip of the session</h4>
+        <p id="aiTipContent"></p>
+      </div>
+    </div>
+
+  </div><!-- .app -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
